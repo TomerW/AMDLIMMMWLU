@@ -77,6 +77,7 @@ state: Dict[str, Any] = {
 async def bmc_target(request: Request) -> Dict[str, str]:
 	payload = await request.json()
 	_validate("TargetMessage", payload)
+	print(f"Received BMC target: {payload}")
 	state["last_target"] = payload
 	azimuth_command = {
 		"azimuth_command": _azimuth_from_north_east(
@@ -93,6 +94,7 @@ async def bmc_target(request: Request) -> Dict[str, str]:
 				json=azimuth_command,
 			)
 			response.raise_for_status()
+			print(f"Sent Turret azimuth command: {azimuth_command}")
 	except httpx.HTTPError as exc:
 		raise HTTPException(status_code=502, detail=f"Turret command failed: {exc}") from exc
 	return {"status": "OK"}
@@ -102,6 +104,7 @@ async def bmc_target(request: Request) -> Dict[str, str]:
 async def bmc_fire_command(request: Request) -> Dict[str, str]:
 	payload = await request.json()
 	_validate("FireCommand", payload)
+	print(f"Received BMC fire-command: {payload}")
 	state["fire_command"] = payload
 	return {"status": "OK"}
 
@@ -110,6 +113,7 @@ async def bmc_fire_command(request: Request) -> Dict[str, str]:
 async def bmc_status(request: Request) -> Dict[str, str]:
 	payload = await request.json()
 	_validate("MissileLockStatus", payload)
+	print(f"Received BMC status: {payload}")
 	state["missile_lock"] = payload
 	return {"status": "OK"}
 
@@ -118,6 +122,7 @@ async def bmc_status(request: Request) -> Dict[str, str]:
 async def muc_lock_command(request: Request) -> Dict[str, str]:
 	payload = await request.json()
 	_validate("LockCommand", payload)
+	print(f"Received MUC lock-command: {payload}")
 	state["lock_command"] = payload
 	return {"status": "OK"}
 
@@ -126,6 +131,7 @@ async def muc_lock_command(request: Request) -> Dict[str, str]:
 async def muc_lock_status(request: Request) -> Dict[str, str]:
 	payload = await request.json()
 	_validate("MissileLockStatus", payload)
+	print(f"Received MUC lock-status: {payload}")
 	state["missile_lock"] = payload
 	return {"status": "OK"}
 
@@ -134,6 +140,7 @@ async def muc_lock_status(request: Request) -> Dict[str, str]:
 async def turret_azimuth_command(request: Request) -> Dict[str, str]:
 	payload = await request.json()
 	_validate("AzimuthCommand", payload)
+	print(f"Received Turret azimuth-command: {payload}")
 	state["azimuth_command"] = payload
 	return {"status": "OK"}
 
@@ -168,6 +175,7 @@ async def turret_azimuth_status_report(request: Request) -> Dict[str, str]:
 							json=lock_command,
 						)
 						response.raise_for_status()
+						print(f"Sent MUC lock-command: {lock_command}")
 				except httpx.HTTPError as exc:
 					raise HTTPException(status_code=502, detail=f"MUC lock command failed: {exc}") from exc
 	return {"status": "OK"}

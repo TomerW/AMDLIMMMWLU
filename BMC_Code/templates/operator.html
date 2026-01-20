@@ -97,6 +97,7 @@
                 <div class="stat-line">Active Targets: <span id="activeCount">0</span></div>
                 <div class="stat-line">Map Size: <span id="mapSize">1000x1000</span></div>
                 <div class="stat-line">Refresh Rate: <span id="refreshRate">Auto</span></div>
+                <div class="stat-line">Turret Azimuth: <span id="turretAzimuth">0°</span></div>
             </div>
         </div>
     </div>
@@ -156,8 +157,8 @@
             const targetArray = Object.values(targets);
             
             // Operator is always at (0, 0) and should be centered
-            let maxDistN = 250; // Default distance
-            let maxDistE = 250; // Default distance
+            let maxDistN = 500; // Minimum ±500 meters
+            let maxDistE = 500; // Minimum ±500 meters
 
             // Calculate maximum distance from operator (0, 0) in each direction
             targetArray.forEach(target => {
@@ -194,7 +195,7 @@
             refreshTargets();
             
             if (autoRefresh) {
-                setInterval(refreshTargets, 3000); // Refresh every 3 seconds
+                setInterval(refreshTargets, 250); // Refresh every 250ms
             }
         }
 
@@ -305,6 +306,11 @@
                 const response = await fetch('/api/TARGET');
                 targets = await response.json();
                 
+                // Also fetch status to get turret azimuth
+                const statusResponse = await fetch('/api/status');
+                const statusData = await statusResponse.json();
+                updateTurretDisplay(statusData.turret_azimuth);
+                
                 calculateBounds();
                 updateViewBox();
                 drawGrid();
@@ -400,9 +406,26 @@
             });
         }
 
-        // Select target
-        function selectTarget(id) {
+        // Select target and notify server
+        async function selectTarget(id) {
             selectedTarget = selectedTarget === id ? null : id;
+            
+            // Notify server of selection
+            if (selectedTarget) {
+                try {
+                    const response = await fetch(`/api/TARGET/${id}/select`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    
+                    if (!response.ok) {
+                        console.error('Failed to select target on server');
+                    }
+                } catch (error) {
+                    console.error('Error notifying server of selection:', error);
+                }
+            }
+            
             drawTargets();
             updateTargetsList();
         }
@@ -412,6 +435,11 @@
             selectedTarget = null;
             drawTargets();
             updateTargetsList();
+        }
+
+        // Update turret azimuth display
+        function updateTurretDisplay(azimuth) {
+            document.getElementById('turretAzimuth').textContent = azimuth.toFixed(1) + '°';
         }
 
         // Update statistics

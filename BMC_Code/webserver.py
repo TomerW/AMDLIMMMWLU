@@ -2,13 +2,64 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 import json
 from pathlib import Path
 import time
+import urllib.request
+import urllib.error
+import threading
+from config import LAUNCHER_URL, LAUNCHER_ENDPOINT
 
 app = Flask(__name__)
 
 # In-memory storage for targets (replace with database if needed)
 targets = {}
 target_timestamps = {}  # Track last update time for each target
-INACTIVE_THRESHOLD = 1.0  # seconds
+selected_target = None  # Track currently selected target
+turret_azimuth = 0  # Track current turret azimuth in degrees
+INACTIVE_THRESHOLD = 5.0  # seconds
+
+# ============= Helper Functions =============
+
+def notify_launcher(target_id):
+    """Notify launcher about the selected target position"""
+    if not target_id or target_id not in targets:
+        return False
+    
+    try:
+        target_data = targets[target_id]
+        position = target_data.get('position', {})
+        velocity = target_data.get('velocity', {})
+        
+        payload = {
+            'target_id': 1,
+            'position_north': position.get('north', 0),
+            'position_east': position.get('east', 0),
+            'position_down': position.get('down', 0),
+            'velocity_north': velocity.get('vn', 0),
+            'velocity_east': velocity.get('ve', 0),
+            'velocity_down': velocity.get('vd', 0),
+        }
+        
+        launcher_url = f"{LAUNCHER_URL}{LAUNCHER_ENDPOINT}"
+        data_bytes = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            launcher_url, 
+            data=data_bytes, 
+            headers={'Content-Type': 'application/json'}, 
+            method="POST"
+        )
+        
+        with urllib.request.urlopen(req, timeout=5.0) as resp:
+            response_data = resp.read()
+        
+        print(f"Notified launcher about target {target_id}: {payload}")
+        return True
+    except Exception as e:
+        print(f"Error notifying launcher: {e}")
+        return False
+
+def notify_launcher_async(target_id):
+    """Send launcher notification asynchronously without blocking"""
+    thread = threading.Thread(target=notify_launcher, args=(target_id,), daemon=True)
+    thread.start()
 
 # ============= Helper Functions =============
 
@@ -38,18 +89,13 @@ def update_target():
     Can accept either a single target object or an array of targets
     """
     try:
-        data = request.get_json()
-
-        for tgt_id in targets.keys():
-            if target_timestamps[tgt_id] > time.time() - INACTIVE_THRESHOLD:
-                del targets[tgt_id]
-                del target_timestamps[tgt_id] 
-                            
+        data = request.get_json()                       
 
         def handle_target(data):
 
             # Extract target ID (required)
             target_id = data.get('id')
+            
             if not target_id:
                 return jsonify({'error': 'Target ID is required'}), 400
             
@@ -66,6 +112,16 @@ def update_target():
                 response = handle_target(target)
         else:
             handle_target(data)
+
+        for tgt_id in targets.keys():
+            print (f"target_timestamps[{tgt_id}] = {target_timestamps[tgt_id]}")
+            if time.time() > target_timestamps[tgt_id] + INACTIVE_THRESHOLD:
+                del targets[tgt_id]
+                del target_timestamps[tgt_id] 
+
+        # If there's a selected target, notify launcher asynchronously
+        if selected_target:
+            notify_launcher_async(selected_target)
 
         return jsonify({
             'status': 'success',
@@ -94,12 +150,74 @@ def get_target(target_id):
 @app.route('/api/TARGET/<target_id>', methods=['DELETE'])
 def delete_target(target_id):
     """DELETE endpoint to remove a target"""
+    global selected_target
+    
     if target_id in targets:
         del targets[target_id]
         if target_id in target_timestamps:
             del target_timestamps[target_id]
+        
+        # Clear selection if deleted target was selected
+        if selected_target == target_id:
+            selected_target = None
+        
         return jsonify({'status': 'success', 'message': f'Target {target_id} deleted'}), 200
     return jsonify({'error': 'Target not found'}), 404
+
+
+@app.route('/api/TARGET/<target_id>/select', methods=['POST'])
+def select_target(target_id):
+    """POST endpoint to select a target and notify launcher asynchronously"""
+    global selected_target
+    
+    if target_id not in targets:
+        return jsonify({'error': 'Target not found'}), 404
+    
+    selected_target = target_id
+    
+    # Notify launcher asynchronously without blocking
+    notify_launcher_async(target_id)
+    
+    return jsonify({
+        'status': 'success',
+        'message': f'Target {target_id} selected',
+        'selected_target': target_id
+    }), 200
+
+
+@app.route('/api/turret/azimuth_update', methods=['POST'])
+def update_turret_azimuth():
+    """POST endpoint to update turret azimuth angle"""
+    global turret_azimuth
+    
+    try:
+        data = request.get_json()
+        
+        if not data or 'azimuth' not in data:
+            return jsonify({'error': 'Azimuth value is required'}), 400
+        
+        azimuth = data.get('azimuth')
+        
+        # Validate that azimuth is a number
+        try:
+            azimuth = float(azimuth)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Azimuth must be a number'}), 400
+        
+        # Normalize azimuth to 0-360 range
+        azimuth = azimuth % 360
+        turret_azimuth = azimuth
+        
+        print(f"Turret azimuth updated: {azimuth}°")
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Turret azimuth updated to {azimuth}°',
+            'azimuth': azimuth
+        }), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ============= Web Interface Routes =============
@@ -121,7 +239,8 @@ def status():
     """API status endpoint"""
     return jsonify({
         'status': 'online',
-        'targets_count': len(targets)
+        'targets_count': len(targets),
+        'turret_azimuth': turret_azimuth
     }), 200
 
 
