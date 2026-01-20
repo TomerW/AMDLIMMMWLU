@@ -1,7 +1,7 @@
 # MMC (Main Mission Computer) – OpenAPI 3.1 Specification
 
 This document defines the MMC interface orders as REST/JSON endpoints in OpenAPI 3.1.
-All messages use **POST** requests with **JSON** payloads.
+All messages use **POST** requests with **JSON** payloads, except where noted.
 
 ## OpenAPI 3.1
 
@@ -157,26 +157,16 @@ paths:
 								$ref: '#/components/schemas/Ack'
 
 	/turret/azimuth-status:
-		post:
-			summary: Turret ➜ MMC Current Turret Azimuth
-			description: Report current turret azimuth in degrees.
-			requestBody:
-				required: true
-				content:
-					application/json:
-						schema:
-							$ref: '#/components/schemas/AzimuthStatus'
-						examples:
-							example:
-								value:
-									current_azimuth: 132
+		get:
+			summary: MMC ➜ Turret Current Turret Azimuth
+			description: Fetch current turret azimuth in degrees.
 			responses:
 				'200':
-					description: Accepted
+					description: OK
 					content:
 						application/json:
 							schema:
-								$ref: '#/components/schemas/Ack'
+								$ref: '#/components/schemas/AzimuthStatus'
 
 components:
 	schemas:

@@ -69,16 +69,43 @@
       ]
     },
     "TargetMessage": {
-      "allOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "target_id": { "$ref": "#/$defs/TargetId" }
-          },
-          "required": ["target_id"]
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "target_id": { "$ref": "#/$defs/TargetId" },
+        "position_north": {
+          "type": "number",
+          "description": "Position north (meters)."
         },
-        { "$ref": "#/$defs/TargetKinematics" }
+        "position_east": {
+          "type": "number",
+          "description": "Position east (meters)."
+        },
+        "position_down": {
+          "type": "number",
+          "description": "Position down (meters)."
+        },
+        "velocity_north": {
+          "type": "number",
+          "description": "Velocity north (meters per second)."
+        },
+        "velocity_east": {
+          "type": "number",
+          "description": "Velocity east (meters per second)."
+        },
+        "velocity_down": {
+          "type": "number",
+          "description": "Velocity down (meters per second)."
+        }
+      },
+      "required": [
+        "target_id",
+        "position_north",
+        "position_east",
+        "position_down",
+        "velocity_north",
+        "velocity_east",
+        "velocity_down"
       ]
     },
     "FireCommand": {
