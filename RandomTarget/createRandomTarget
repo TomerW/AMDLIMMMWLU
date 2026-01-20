@@ -1,0 +1,230 @@
+# ...existing code...
+import tkinter as tk
+import threading
+import json
+import time
+import random
+import os
+import tempfile
+# ...existing code...
+
+# --- Configuration ---
+JSON_FILENAME = "live_targets.json"
+# How often each target updates its internal position (e.g., 0.05 = 50ms)
+TARGET_UPDATE_RATE = 0.05
+# default write rate = 100 ms
+JSON_WRITE_RATE = 0.1
+# how long a target lives (seconds)
+TARGET_LIFETIME = 30.0
+
+# --- Shared Resources (Protected by Lock) ---
+# A list holding all active Target objects
+active_targets = []
+# The lock ensures only one thread can access 'active_targets' at a time
+targets_lock = threading.Lock()
+
+# keep references to per-target threads so we can join them on exit
+target_threads = []
+
+# Event used to signal all threads to stop when closing the app
+stop_threads_event = threading.Event()
+# ...existing code...
+
+class Target:
+    """Holds the data and logic for a single target in 3D space."""
+    def __init__(self, target_id):
+        self.target_id = target_id
+        self.x = round(random.uniform(-500, 500), 2)
+        self.y = round(random.uniform(-500, 500), 2)
+        self.z = round(random.uniform(0, 500), 2) # Assuming Z is height
+        # Random constant velocity
+        self.vx = round(random.uniform(-20, 20), 2)
+        self.vy = round(random.uniform(-20, 20), 2)
+        self.vz = round(random.uniform(-5, 5), 2)
+        self.creation_time = time.time()
+
+    def update_position(self, dt):
+        """Calculates new position based on velocity and delta time."""
+        self.x = round(self.x + (self.vx * dt), 2)
+        self.y = round(self.y + (self.vy * dt), 2)
+        self.z = round(self.z + (self.vz * dt), 2)
+
+    def to_dict(self):
+        """Prepares target data for JSON serialization."""
+        return {
+            "id": self.target_id,
+            "timestamp": time.time(),
+            "position": {"x": self.x, "y": self.y, "z": self.z},
+            "velocity": {"vx": self.vx, "vy": self.vy, "vz": self.vz}
+        }
+# ...existing code...
+
+def target_thread_task(target_obj: Target):
+    """
+    The code that runs inside each individual target thread.
+    It continuously updates the target's position and self-terminates
+    after TARGET_LIFETIME seconds (removes itself from active_targets).
+    """
+    print(f"Thread started for Target ID: {target_obj.target_id}")
+    last_time = time.time()
+    while not stop_threads_event.is_set():
+        now = time.time()
+        dt = now - last_time
+        last_time = now
+
+        # update using true dt so movement follows assigned velocity
+        target_obj.update_position(dt)
+
+        # check lifetime expiration
+        age = now - target_obj.creation_time
+        if age >= TARGET_LIFETIME:
+            with targets_lock:
+                try:
+                    active_targets.remove(target_obj)
+                except ValueError:
+                    pass
+            print(f"Target {target_obj.target_id} expired after {TARGET_LIFETIME} seconds.")
+            break
+
+        time.sleep(TARGET_UPDATE_RATE)
+    print(f"Thread stopped for Target ID: {target_obj.target_id}")
+
+def json_logger_task():
+    """
+    A background thread that periodically collects data from ALL active targets
+    and dumps it into the JSON file. Uses atomic write to avoid partial files.
+    """
+    print("JSON Logger thread started.")
+    while not stop_threads_event.is_set():
+        current_data_snapshot = []
+
+        # read and snapshot target fields under lock to keep consistency
+        with targets_lock:
+            for target in active_targets:
+                current_data_snapshot.append({
+                    "id": target.target_id,
+                    "timestamp": time.time(),
+                    "position": {"x": target.x, "y": target.y, "z": target.z},
+                    "velocity": {"vx": target.vx, "vy": target.vy, "vz": target.vz}
+                })
+
+        try:
+            dirpath = os.path.dirname(JSON_FILENAME) or "."
+            with tempfile.NamedTemporaryFile('w', delete=False, dir=dirpath, encoding='utf-8') as tf:
+                json.dump(current_data_snapshot, tf, indent=2)
+                tempname = tf.name
+            os.replace(tempname, JSON_FILENAME)
+        except Exception as e:
+            print(f"Error writing JSON: {e}")
+
+        # read current global JSON_WRITE_RATE (can be updated from UI)
+        sleep_time = max(0.01, JSON_WRITE_RATE)  # lower bound to avoid too-small sleeps
+        time.sleep(sleep_time)
+    print("JSON Logger thread stopped.")
+# ...existing code...
+
+class TargetGeneratorUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("3D Target Generator Controller")
+        self.root.geometry("360x240")
+        self.target_counter = 0
+
+        # UI Elements
+        self.label_info = tk.Label(root, text="Click to spawn independent targets.", pady=10)
+        self.label_info.pack()
+
+        self.btn_add_target = tk.Button(root, text="GENERATE TARGET THREAD", 
+                                        command=self.add_target_thread, 
+                                        bg="#4CAF50", fg="white", font=("Arial", 10, "bold"), padx=10, pady=5)
+        self.btn_add_target.pack(pady=8)
+
+        # JSON rate controls
+        frame_rate = tk.Frame(root)
+        frame_rate.pack(pady=6)
+        tk.Label(frame_rate, text="JSON write interval (s):").pack(side=tk.LEFT)
+        self.entry_json_rate = tk.Entry(frame_rate, width=6)
+        self.entry_json_rate.insert(0, str(JSON_WRITE_RATE))
+        self.entry_json_rate.pack(side=tk.LEFT, padx=6)
+        self.btn_apply_rate = tk.Button(frame_rate, text="Apply", command=self.apply_json_rate)
+        self.btn_apply_rate.pack(side=tk.LEFT)
+
+        self.label_status = tk.Label(root, text="Active Targets: 0", fg="blue")
+        self.label_status.pack(side=tk.BOTTOM, pady=10)
+
+        # Start the separate logger thread immediately upon UI startup (non-daemon so we can join cleanly)
+        self.logger_thread = threading.Thread(target=json_logger_task, daemon=False)
+        self.logger_thread.start()
+
+        # Schedule periodic UI updates for status
+        self._schedule_status_update()
+
+    def add_target_thread(self):
+        """Handles button click: creates target, adds to list, starts thread."""
+        self.target_counter += 1
+        new_target = Target(target_id=f"T-{self.target_counter}")
+
+        # Add to the shared list safely using the lock
+        with targets_lock:
+            active_targets.append(new_target)
+        
+        # Create and start the independent thread for this target (non-daemon)
+        t = threading.Thread(target=target_thread_task, args=(new_target,), daemon=False)
+        t.start()
+        # keep reference so we can join on shutdown
+        target_threads.append(t)
+
+        # Update UI
+        self.update_status_label()
+        print(f"-> Spawned Target {new_target.target_id}")
+
+    def apply_json_rate(self):
+        """Called when user applies a new JSON write interval."""
+        global JSON_WRITE_RATE
+        try:
+            val = float(self.entry_json_rate.get())
+            if val <= 0:
+                raise ValueError("Must be positive")
+            JSON_WRITE_RATE = val
+            print(f"JSON write interval set to {JSON_WRITE_RATE} s")
+        except Exception as e:
+            print(f"Invalid interval: {e}")
+
+    def update_status_label(self):
+        with targets_lock:
+            count = len(active_targets)
+        self.label_status.config(text=f"Active Targets: {count}")
+
+    def _schedule_status_update(self):
+        self.update_status_label()
+        # update every 100 ms so UI shows live count
+        self.root.after(100, self._schedule_status_update)
+
+    def on_closing(self):
+        """Handles window close event to stop threads gracefully."""
+        print("\nStopping all threads... please wait.")
+        stop_threads_event.set()
+
+        # join per-target threads
+        for t in list(target_threads):
+            t.join(timeout=1.0)
+
+        # join logger thread
+        if hasattr(self, "logger_thread"):
+            self.logger_thread.join(timeout=2.0)
+
+        # small grace wait to let final writes complete
+        time.sleep(0.05)
+        self.root.destroy()
+# ...existing code...
+
+# --- Main Execution ---
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = TargetGeneratorUI(root)
+    
+    # Handle the 'X' button on the window
+    root.protocol("WM_DELETE_WINDOW", app.on_closing)
+    
+    root.mainloop()
+# ...existing code...
