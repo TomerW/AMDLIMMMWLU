@@ -13,7 +13,7 @@ targets = {}
 def update_target():
     """
     POST endpoint to update target info
-    Expects JSON payload with target data
+    Expects JSON payload with hierarchical structure containing position and velocity
     """
     try:
         data = request.get_json()
@@ -25,6 +25,10 @@ def update_target():
         target_id = data.get('id')
         if not target_id:
             return jsonify({'error': 'Target ID is required'}), 400
+        
+        # Validate hierarchical structure
+        if 'position' not in data:
+            return jsonify({'error': 'Position object is required'}), 400
         
         # Store target data
         targets[target_id] = data

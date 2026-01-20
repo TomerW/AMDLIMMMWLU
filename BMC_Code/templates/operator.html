@@ -117,16 +117,27 @@
 
         // Extract NED coordinates from target data
         function getCoordinates(data) {
-            // Accept both "north"/"east" and legacy "y"/"x" fields
-            let north = data.north !== undefined ? data.north : (data.y !== undefined ? data.y : 0);
-            let east = data.east !== undefined ? data.east : (data.x !== undefined ? data.x : 0);
-            let down = data.down !== undefined ? data.down : (data.z !== undefined ? data.z : 0);
+            // Extract from hierarchical position object
+            const position = data.position || {};
+            let north = position.north !== undefined ? position.north : 0;
+            let east = position.east !== undefined ? position.east : 0;
+            let down = position.down !== undefined ? position.down : 0;
             
             // Snap to grid
             north = snapToGrid(north);
             east = snapToGrid(east);
             
             return { north, east, down };
+        }
+
+        // Extract velocity from target data
+        function getVelocity(data) {
+            const velocity = data.velocity || {};
+            return {
+                vn: velocity.vn || 0,
+                ve: velocity.ve || 0,
+                vd: velocity.vd || 0
+            };
         }
 
         // Calculate map bounds from all targets
@@ -317,11 +328,11 @@
                 circle.setAttribute('r', '6');
                 group.appendChild(circle);
 
-                // Target name label
+                // Target name label (use ID as name)
                 const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                 text.setAttribute('x', east);
                 text.setAttribute('y', north - 12);
-                text.textContent = (data.name || id).toUpperCase();
+                text.textContent = id.toUpperCase();
                 group.appendChild(text);
 
                 // Click handler
@@ -350,8 +361,11 @@
 
                 const info = document.createElement('div');
                 info.className = 'target-info';
-                const { north, east } = getCoordinates(data);
-                info.textContent = `N: ${north} E: ${east}`;
+                const { north, east, down } = getCoordinates(data);
+                const { vn, ve, vd } = getVelocity(data);
+                const timestamp = (data.timestamp || 'N/A');
+                info.innerHTML = `N: ${north} E: ${east} D: ${down}<br/>VN: ${vn} VE: ${ve} VD: ${vd}<br/>T: ${timestamp}`;
+
 
                 item.appendChild(idSpan);
                 item.appendChild(info);
