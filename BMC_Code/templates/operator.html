@@ -40,11 +40,16 @@
         
         /* Target markers */
         .target-marker { cursor: pointer; transition: all 0.2s; }
-        .target-marker circle { fill: #ff3333; stroke: #ff6666; stroke-width: 2; }
-        .target-marker:hover circle { fill: #ff6666; r: 8; }
-        .target-marker text { font-size: 12px; fill: #0f0; font-weight: bold; pointer-events: none; text-anchor: middle; }
+        .target-marker circle { fill: #ff3333; stroke: #ff6666; stroke-width: 2; r: 40; }
+        .target-marker:hover circle { fill: #ff6666; r: 52; }
+        .target-marker text { font-size: 44px; fill: #0f0; font-weight: bold; pointer-events: none; text-anchor: middle; dominant-baseline: middle; dy: 0; }
         
-        .target-marker.selected circle { fill: #00ff00; stroke: #00ff00; stroke-width: 3; }
+        .target-marker.selected circle { fill: #00ff00; stroke: #00ff00; stroke-width: 3; r: 52; }
+        
+        /* Inactive target styling */
+        .target-marker.inactive circle { fill: #888888; stroke: #666666; stroke-width: 2; r: 40; }
+        .target-marker.inactive:hover circle { fill: #999999; r: 52; }
+        .target-marker.inactive.selected circle { fill: #aaaaaa; stroke: #aaaaaa; stroke-width: 3; r: 52; }
         
         /* Legend */
         .legend { position: absolute; bottom: 15px; right: 15px; background-color: rgba(0, 0, 0, 0.8); padding: 15px; border: 2px solid #0f0; border-radius: 4px; }
@@ -71,7 +76,8 @@
                     <g id="targets"></g>
                 </svg>
                 <div class="legend">
-                    <div class="legend-item"><span class="legend-marker active"></span>Active Target</div>
+                    <div class="legend-item"><span class="legend-marker active"></span>Active Target (< 5s)</div>
+                    <div class="legend-item"><span class="legend-marker" style="background-color: #888888; border: 2px solid #666666;"></span>Inactive Target (> 5s)</div>
                     <div class="legend-item"><span class="legend-marker selected"></span>Selected Target</div>
                 </div>
             </div>
@@ -109,6 +115,11 @@
         const gridGroup = document.getElementById('grid');
         const operatorGroup = document.getElementById('operator-marker');
         const targetsGroup = document.getElementById('targets');
+
+        // Check if target is inactive (based on server status)
+        function isTargetInactive(targetData) {
+            return targetData._active === false;
+        }
 
         // Snap coordinates to grid
         function snapToGrid(value) {
@@ -312,10 +323,15 @@
 
             Object.entries(targets).forEach(([id, data]) => {
                 const { north, east } = getCoordinates(data);
+                const inactive = isTargetInactive(data);
 
                 const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
                 group.setAttribute('class', 'target-marker');
                 group.setAttribute('data-id', id);
+                
+                if (inactive) {
+                    group.classList.add('inactive');
+                }
                 
                 if (selectedTarget === id) {
                     group.classList.add('selected');
@@ -350,21 +366,30 @@
             Object.entries(targets).forEach(([id, data]) => {
                 const item = document.createElement('div');
                 item.className = 'target-item';
+                const inactive = isTargetInactive(data);
+                if (inactive) {
+                    item.style.opacity = '0.6';
+                    item.style.borderColor = '#888888';
+                }
                 if (selectedTarget === id) {
                     item.classList.add('selected');
                 }
 
                 const idSpan = document.createElement('div');
                 idSpan.className = 'target-id';
-                idSpan.textContent = `[${id}] ${data.name || 'Unknown'}`;
+                const statusLabel = inactive ? ' [INACTIVE]' : ' [ACTIVE]';
+                idSpan.textContent = `[${id}] ${data.name || 'Unknown'}${statusLabel}`;
+                if (inactive) {
+                    idSpan.style.color = '#888888';
+                }
 
 
                 const info = document.createElement('div');
                 info.className = 'target-info';
                 const { north, east, down } = getCoordinates(data);
                 const { vn, ve, vd } = getVelocity(data);
-                const timestamp = (data.timestamp || 'N/A');
-                info.innerHTML = `N: ${north} E: ${east} D: ${down}<br/>VN: ${vn} VE: ${ve} VD: ${vd}<br/>T: ${timestamp}`;
+                const lastUpdateTime = data._last_update ? Math.round((Date.now() / 1000) - data._last_update) : 0;
+                info.innerHTML = `N: ${north} E: ${east} D: ${down}<br/>VN: ${vn} VE: ${ve} VD: ${vd}<br/>Updated: ${lastUpdateTime}s ago`;
 
 
                 item.appendChild(idSpan);
