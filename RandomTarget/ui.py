@@ -88,7 +88,7 @@ class TargetGeneratorUI:
         # Minimal graphical preview (canvas)
         tk.Label(right, text="Simple map (East right, North up) :").pack(anchor=tk.W, pady=(6, 0))
         # reduce canvas height to give more room to JSON preview below
-        self.canvas = tk.Canvas(right, height=180, bg="#ffffff", bd=1, relief=tk.SUNKEN)
+        self.canvas = tk.Canvas(right, height=180, bg="#f8f8f8", bd=1, relief=tk.SUNKEN, highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=False, pady=(4, 6))
         # mapping objects
         self.canvas_items = {}
@@ -213,6 +213,9 @@ class TargetGeneratorUI:
         h = max(200, self.canvas.winfo_height() or 200)
         pad = self.canvas_padding
 
+        # clear canvas each time (easier grid/axes management)
+        self.canvas.delete("all")
+
         # compute bounds
         if items:
             norths = [t.north for t in items]
@@ -238,17 +241,48 @@ class TargetGeneratorUI:
             rng_n = max_n - min_n
             rng_e = max_e - min_e
 
+        # draw background grid and axes
+        # outer border
+        self.canvas.create_rectangle(pad, pad, w - pad, h - pad, outline="#cccccc", width=1)
+        
+        # grid lines (light gray dashed)
+        grid_step = max(50.0, rng_e / 5.0)  # aim for ~5 divisions
+        e = min_e
+        while e <= max_e:
+            x = pad + ((e - min_e) / rng_e) * (w - 2 * pad)
+            self.canvas.create_line(x, pad, x, h - pad, fill="#e0e0e0", dash=(2, 2))
+            e += grid_step
+        
+        grid_step = max(50.0, rng_n / 5.0)
+        n = min_n
+        while n <= max_n:
+            y = pad + ((max_n - n) / rng_n) * (h - 2 * pad)
+            self.canvas.create_line(pad, y, w - pad, y, fill="#e0e0e0", dash=(2, 2))
+            n += grid_step
+        
+        # axis labels (cardinal directions)
+        self.canvas.create_text(w - pad - 5, h - pad - 2, text="E", anchor=tk.SE, font=("Arial", 7, "bold"), fill="#333333")
+        self.canvas.create_text(pad + 5, pad + 3, text="N", anchor=tk.NW, font=("Arial", 7, "bold"), fill="#333333")
+        
+        # center reference cross (if origin is visible)
+        if rng_n > 100 and rng_e > 100:
+            cx = pad + ((0.0 - min_e) / rng_e) * (w - 2 * pad) if min_e <= 0 <= max_e else None
+            cy = pad + ((max_n - 0.0) / rng_n) * (h - 2 * pad) if min_n <= 0 <= max_n else None
+            if cx is not None and pad <= cx <= w - pad:
+                self.canvas.create_line(cx, pad, cx, h - pad, fill="#ffcccc", width=1, dash=(1, 2))
+            if cy is not None and pad <= cy <= h - pad:
+                self.canvas.create_line(pad, cy, w - pad, cy, fill="#ffcccc", width=1, dash=(1, 2))
+
+        # clear target item id mappings (canvas was cleared, items will be recreated)
+        self.canvas_items.clear()
+        self.target_trails.clear()
+
         # clear and reuse items
         existing = set(self.canvas_items.keys())
         now_ids = set(t.target_id for t in items)
 
-        # remove old canvas items
-        for old in existing - now_ids:
-            for cid in self.canvas_items.pop(old):
-                try:
-                    self.canvas.delete(cid)
-                except Exception:
-                    pass
+        # remove old canvas items (but since canvas.delete("all") was called, just clear the mapping)
+        # items will be recreated below
 
         # draw each target
         for t in items:
@@ -329,15 +363,15 @@ class TargetGeneratorUI:
                 self.canvas.coords(o_text, x + r + 2, y - r - 2)
                 self.canvas.itemconfigure(o_text, text=f"{t.target_id} {speed:.1f}m/s D={t.down:.1f}m")
             else:
-                circ = self.canvas.create_oval(x - r, y - r, x + r, y + r, fill=color, outline="#333333")
-                hline = self.canvas.create_line(x, y, x2, y2, fill="#333333")
-                vline = self.canvas.create_line(vx1, vy1, vx2, vy2, fill="#000000")
-                text = self.canvas.create_text(x + r + 2, y - r - 2, text=t.target_id, anchor=tk.NW, font=("Arial", 8))
+                circ = self.canvas.create_oval(x - r, y - r, x + r, y + r, fill=color, outline="#1a1a1a", width=1)
+                hline = self.canvas.create_line(x, y, x2, y2, fill="#666666", width=1)
+                vline = self.canvas.create_line(vx1, vy1, vx2, vy2, fill="#000000", width=1)
+                text = self.canvas.create_text(x + r + 2, y - r - 2, text=t.target_id, anchor=tk.NW, font=("Arial", 8, "bold"), fill="#000000")
                 # create trail polyline (flatten coords)
                 pts = sum(tr, ())
                 trail = None
                 if len(pts) >= 4:
-                    trail = self.canvas.create_line(*pts, fill=color, width=2)
+                    trail = self.canvas.create_line(*pts, fill=color, width=1)
                 self.canvas_items[t.target_id] = (circ, hline, vline, text, trail)
 
     def _schedule_json_preview(self):
