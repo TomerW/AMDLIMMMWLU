@@ -23,28 +23,34 @@ Content-Type: application/json
 **Request Body:**
 ```json
 {
-  "id": "target-001",
-  "name": "Tank Alpha",
-  "north": 250,
-  "east": 350,
-  "down": 50,
-  "status": "active",
-  "value": 100,
-  "type": "armored_vehicle"
+  "id": "T-123",
+  "timestamp": 1342.44,
+  "position": {
+    "north": 1.53,
+    "east": -43.22,
+    "down": -600.5
+  },
+  "velocity": {
+    "vn": 0.1,
+    "ve": -2.5,
+    "vd": -0.8
+  }
 }
 ```
 
 **Required Fields:**
-- `id` (string): Unique identifier for the target
+- `id` (string): Unique identifier for the target (also used as display name)
+- `position` (object): Target position in NED coordinates
+  - `north` (number): North coordinate (vertical axis)
+  - `east` (number): East coordinate (horizontal axis)
+  - `down` (number): Down coordinate (altitude/depth)
 
 **Optional Fields:**
-- `name` (string): Display name for the target
-- `north` (number): North coordinate (vertical axis, increases upward on map)
-- `east` (number): East coordinate (horizontal axis, increases rightward on map)
-- `down` (number): Down coordinate (altitude/depth, positive values go down)
-- `status` (string): Target status (e.g., "active", "inactive", "tracked")
-- `value` (number): Priority or value of the target
-- `type` (string): Type of target (e.g., "armored_vehicle", "soldier", "installation")
+- `timestamp` (number): Time of the measurement/update
+- `velocity` (object): Target velocity in NED frame
+  - `vn` (number): Velocity North component
+  - `ve` (number): Velocity East component
+  - `vd` (number): Velocity Down component
 - Additional custom fields can be added as needed
 
 **Coordinate System:**
@@ -53,22 +59,26 @@ The system uses NED (North-East-Down) coordinates:
 - **East**: Horizontal axis on the map (positive = right/east)
 - **Down**: Altitude (positive = down/below reference level)
 
-The map automatically scales to display all targets with a 50-pixel margin.
+The map automatically scales to display all targets with a 50-pixel margin, centered on the operator position at (0, 0, 0).
 
 **Response:**
 ```json
 {
   "status": "success",
-  "message": "Target target-001 updated successfully",
+  "message": "Target T-123 updated successfully",
   "data": {
-    "id": "target-001",
-    "name": "Tank Alpha",
-    "north": 250,
-    "east": 350,
-    "down": 50,
-    "status": "active",
-    "value": 100,
-    "type": "armored_vehicle"
+    "id": "T-123",
+    "timestamp": 1342.44,
+    "position": {
+      "north": 1.53,
+      "east": -43.22,
+      "down": -600.5
+    },
+    "velocity": {
+      "vn": 0.1,
+      "ve": -2.5,
+      "vd": -0.8
+    }
   }
 }
 ```
@@ -96,24 +106,32 @@ The map automatically scales to display all targets with a 50-pixel margin.
 ```json
 {
   "target-001": {
-    "id": "target-001",
-    "name": "Tank Alpha",
-    "north": 250,
-    "east": 350,
-    "down": 50,
-    "status": "active",
-    "value": 100,
-    "type": "armored_vehicle"
+    "id": "T-123",
+    "timestamp": 1342.44,
+    "position": {
+      "north": 1.53,
+      "east": -43.22,
+      "down": -600.5
+    },
+    "velocity": {
+      "vn": 0.1,
+      "ve": -2.5,
+      "vd": -0.8
+    }
   },
   "target-002": {
-    "id": "target-002",
-    "name": "Infantry Squad",
-    "north": 500,
-    "east": 600,
-    "down": 0,
-    "status": "active",
-    "value": 50,
-    "type": "soldier"
+    "id": "T-124",
+    "timestamp": 1343.50,
+    "position": {
+      "north": 50.0,
+      "east": 60.0,
+      "down": -100.0
+    },
+    "velocity": {
+      "vn": 0.5,
+      "ve": -1.0,
+      "vd": 0.0
+    }
   }
 }
 ```
@@ -133,14 +151,18 @@ The map automatically scales to display all targets with a 50-pixel margin.
 **Response (Success):**
 ```json
 {
-  "id": "target-001",
-  "name": "Tank Alpha",
-  "north": 250,
-  "east": 350,
-  "down": 50,
-  "status": "active",
-  "value": 100,
-  "type": "armored_vehicle"
+  "id": "T-123",
+  "timestamp": 1342.44,
+  "position": {
+    "north": 1.53,
+    "east": -43.22,
+    "down": -600.5
+  },
+  "velocity": {
+    "vn": 0.1,
+    "ve": -2.5,
+    "vd": -0.8
+  }
 }
 ```
 
@@ -212,14 +234,18 @@ The map automatically scales to display all targets with a 50-pixel margin.
 curl -X POST http://localhost:5000/api/TARGET \
   -H "Content-Type: application/json" \
   -d '{
-    "id": "target-001",
-    "name": "Tank Alpha",
-    "north": 250,
-    "east": 350,
-    "down": 50,
-    "status": "active",
-    "value": 100,
-    "type": "armored_vehicle"
+    "id": "T-123",
+    "timestamp": 1342.44,
+    "position": {
+      "north": 250.0,
+      "east": 350.0,
+      "down": -50.0
+    },
+    "velocity": {
+      "vn": 0.1,
+      "ve": -2.5,
+      "vd": -0.8
+    }
   }'
 ```
 
@@ -253,14 +279,18 @@ BASE_URL = "http://localhost:5000/api"
 
 # Create/Update a target
 target_data = {
-    "id": "target-001",
-    "name": "Tank Alpha",
-    "north": 250,
-    "east": 350,
-    "down": 50,
-    "status": "active",
-    "value": 100,
-    "type": "armored_vehicle"
+    "id": "T-123",
+    "timestamp": 1342.44,
+    "position": {
+        "north": 250.0,
+        "east": 350.0,
+        "down": -50.0
+    },
+    "velocity": {
+        "vn": 0.1,
+        "ve": -2.5,
+        "vd": -0.8
+    }
 }
 
 response = requests.post(
@@ -288,14 +318,18 @@ print(response.json())
 ```javascript
 // Create/Update a target
 const targetData = {
-    id: "target-001",
-    name: "Tank Alpha",
-    north: 250,
-    east: 350,
-    down: 50,
-    status: "active",
-    value: 100,
-    type: "armored_vehicle"
+    id: "T-123",
+    timestamp: 1342.44,
+    position: {
+        north: 250.0,
+        east: 350.0,
+        down: -50.0
+    },
+    velocity: {
+        vn: 0.1,
+        ve: -2.5,
+        vd: -0.8
+    }
 };
 
 fetch('http://localhost:5000/api/TARGET', {

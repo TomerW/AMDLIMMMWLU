@@ -23,8 +23,8 @@ def json_logger_task():
                 current_data_snapshot.append({
                     "id": target.target_id,
                     "timestamp": time.time(),
-                    "position": {"x": target.x, "y": target.y, "z": target.z},
-                    "velocity": {"vx": target.vx, "vy": target.vy, "vz": target.vz}
+                    "position": {"north": target.north, "east": target.east, "down": target.down},
+                    "velocity": {"vn": target.vn, "ve": target.ve, "vd": target.vd}
                 })
 
         # write directly (no temp file). flush+fsync to reduce partial-write window.
@@ -38,6 +38,23 @@ def json_logger_task():
                     pass
         except Exception as e:
             print(f"Error writing JSON: {e}")
+
+        # Also write a secondary copy into the Random_test folder for test harnesses
+        try:
+            test_path = config.TEST_JSON_FILENAME
+            test_dir = os.path.dirname(test_path)
+            if test_dir and not os.path.exists(test_dir):
+                os.makedirs(test_dir, exist_ok=True)
+            with open(test_path, "w", encoding="utf-8") as tf:
+                json.dump(current_data_snapshot, tf, indent=2, ensure_ascii=False)
+                tf.flush()
+                try:
+                    os.fsync(tf.fileno())
+                except Exception:
+                    pass
+        except Exception as e:
+            # non-fatal
+            print(f"Error writing test JSON: {e}")
 
         # optionally POST the JSON to the configured endpoint (REST API)
         if config.SEND_TO_ENDPOINT and config.ENDPOINT_URL:
