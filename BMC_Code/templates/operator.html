@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Operator Interface - Target Map</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background-color: #1a1a1a; color: #fff; }
+        .container { display: flex; height: 100vh; }
+        
+        .main-map { flex: 1; display: flex; flex-direction: column; }
+        .map-header { background-color: #222; padding: 15px; border-bottom: 2px solid #0f0; }
+        .map-header h1 { color: #0f0; font-size: 1.5em; margin-bottom: 5px; }
+        .map-header p { color: #888; font-size: 0.9em; }
+        
+        .map-canvas { flex: 1; background-color: #0a0a0a; position: relative; overflow: hidden; border: 2px solid #0f0; }
+        svg { width: 100%; height: 100%; }
+        
+        .sidebar { width: 300px; background-color: #222; border-left: 2px solid #0f0; display: flex; flex-direction: column; }
+        .sidebar-header { background-color: #1a1a1a; padding: 15px; border-bottom: 2px solid #0f0; }
+        .sidebar-header h2 { color: #0f0; font-size: 1.2em; }
+        
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 15px; }
+        .target-item { background-color: #1a1a1a; padding: 10px; margin-bottom: 10px; border: 1px solid #0f0; border-radius: 4px; cursor: pointer; transition: all 0.3s; }
+        .target-item:hover { background-color: #2a2a2a; box-shadow: 0 0 10px #0f0; }
+        .target-item.selected { box-shadow: inset 0 0 10px #0f0; background-color: #1a3a1a; }
+        .target-id { color: #0f0; font-weight: bold; }
+        .target-info { color: #888; font-size: 0.85em; margin-top: 5px; }
+        
+        .controls { background-color: #1a1a1a; padding: 15px; border-top: 2px solid #0f0; }
+        .control-button { background-color: #0f0; color: #000; border: none; padding: 10px 15px; margin: 5px 0; width: 100%; cursor: pointer; border-radius: 4px; font-weight: bold; transition: all 0.3s; }
+        .control-button:hover { background-color: #0d0; box-shadow: 0 0 10px #0f0; }
+        .control-button:active { transform: scale(0.95); }
+        
+        .stats { background-color: #1a1a1a; padding: 10px; border-top: 1px solid #0f0; font-size: 0.85em; }
+        .stat-line { color: #0f0; margin: 3px 0; }
+        
+        .grid-background { opacity: 0.1; }
+        
+        /* Target markers */
+        .target-marker { cursor: pointer; transition: all 0.2s; }
+        .target-marker circle { fill: #ff3333; stroke: #ff6666; stroke-width: 2; }
+        .target-marker:hover circle { fill: #ff6666; r: 8; }
+        .target-marker text { font-size: 12px; fill: #0f0; font-weight: bold; pointer-events: none; text-anchor: middle; }
+        
+        .target-marker.selected circle { fill: #00ff00; stroke: #00ff00; stroke-width: 3; }
+        
+        /* Legend */
+        .legend { position: absolute; bottom: 15px; right: 15px; background-color: rgba(0, 0, 0, 0.8); padding: 15px; border: 2px solid #0f0; border-radius: 4px; }
+        .legend-item { color: #0f0; font-size: 0.85em; margin: 5px 0; }
+        .legend-marker { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+        .legend-marker.active { background-color: #ff3333; border: 2px solid #ff6666; }
+        .legend-marker.selected { background-color: #00ff00; border: 2px solid #00ff00; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="main-map">
+            <div class="map-header">
+                <h1>OPERATOR MAP</h1>
+                <p>Target Detection and Tracking System (Bird's Eye View - NED Coordinates)</p>
+            </div>
+            <div class="map-canvas">
+                <svg id="mapSvg" preserveAspectRatio="xMidYMid meet">
+                    <!-- Grid will be drawn here -->
+                    <g id="grid" class="grid-background"></g>
+                    <!-- Operator position marker -->
+                    <g id="operator-marker"></g>
+                    <!-- Targets will be drawn here -->
+                    <g id="targets"></g>
+                </svg>
+                <div class="legend">
+                    <div class="legend-item"><span class="legend-marker active"></span>Active Target</div>
+                    <div class="legend-item"><span class="legend-marker selected"></span>Selected Target</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>TARGETS</h2>
+            </div>
+            <div class="sidebar-content" id="targetsList"></div>
+            <div class="controls">
+                <button class="control-button" onclick="refreshTargets()">REFRESH</button>
+                <button class="control-button" onclick="clearSelection()">CLEAR SELECTION</button>
+                <button class="control-button" onclick="toggleGrid()">TOGGLE GRID</button>
+            </div>
+            <div class="stats">
+                <div class="stat-line">Active Targets: <span id="activeCount">0</span></div>
+                <div class="stat-line">Map Size: <span id="mapSize">1000x1000</span></div>
+                <div class="stat-line">Refresh Rate: <span id="refreshRate">Auto</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const GRID_SPACING = 50;
+        const MARGIN = 50;
+        let targets = {};
+        let selectedTarget = null;
+        let showGrid = true;
+        let autoRefresh = true;
+        let mapBounds = { minN: 0, maxN: 0, minE: 0, maxE: 0 };
+        let scale = 1;
+
+        const svg = document.getElementById('mapSvg');
+        const gridGroup = document.getElementById('grid');
+        const operatorGroup = document.getElementById('operator-marker');
+        const targetsGroup = document.getElementById('targets');
+
+        // Snap coordinates to grid
+        function snapToGrid(value) {
+            return Math.round(value / GRID_SPACING) * GRID_SPACING;
+        }
+
+        // Extract NED coordinates from target data
+        function getCoordinates(data) {
+            // Accept both "north"/"east" and legacy "y"/"x" fields
+            let north = data.north !== undefined ? data.north : (data.y !== undefined ? data.y : 0);
+            let east = data.east !== undefined ? data.east : (data.x !== undefined ? data.x : 0);
+            let down = data.down !== undefined ? data.down : (data.z !== undefined ? data.z : 0);
+            
+            // Snap to grid
+            north = snapToGrid(north);
+            east = snapToGrid(east);
+            
+            return { north, east, down };
+        }
+
+        // Calculate map bounds from all targets
+        function calculateBounds() {
+            const targetArray = Object.values(targets);
+            
+            // Operator is always at (0, 0) and should be centered
+            let maxDistN = 250; // Default distance
+            let maxDistE = 250; // Default distance
+
+            // Calculate maximum distance from operator (0, 0) in each direction
+            targetArray.forEach(target => {
+                const { north, east } = getCoordinates(target);
+                maxDistN = Math.max(maxDistN, Math.abs(north));
+                maxDistE = Math.max(maxDistE, Math.abs(east));
+            });
+
+            // Add margin and make symmetric around (0, 0)
+            const totalMarginN = maxDistN + MARGIN;
+            const totalMarginE = maxDistE + MARGIN;
+
+            mapBounds = {
+                minN: -totalMarginN,
+                maxN: totalMarginN,
+                minE: -totalMarginE,
+                maxE: totalMarginE
+            };
+        }
+
+        // Update SVG viewBox based on bounds
+        function updateViewBox() {
+            const width = mapBounds.maxE - mapBounds.minE;
+            const height = mapBounds.maxN - mapBounds.minN;
+            svg.setAttribute('viewBox', `${mapBounds.minE} ${mapBounds.minN} ${width} ${height}`);
+        }
+
+        // Initialize map
+        function initMap() {
+            calculateBounds();
+            updateViewBox();
+            drawGrid();
+            drawOperator();
+            refreshTargets();
+            
+            if (autoRefresh) {
+                setInterval(refreshTargets, 3000); // Refresh every 3 seconds
+            }
+        }
+
+        // Draw grid background
+        function drawGrid() {
+            gridGroup.innerHTML = '';
+            
+            if (!showGrid) return;
+
+            const minN = Math.floor(mapBounds.minN / GRID_SPACING) * GRID_SPACING;
+            const maxN = Math.ceil(mapBounds.maxN / GRID_SPACING) * GRID_SPACING;
+            const minE = Math.floor(mapBounds.minE / GRID_SPACING) * GRID_SPACING;
+            const maxE = Math.ceil(mapBounds.maxE / GRID_SPACING) * GRID_SPACING;
+
+            // Vertical lines (East direction)
+            for (let e = minE; e <= maxE; e += GRID_SPACING) {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', e);
+                line.setAttribute('y1', minN);
+                line.setAttribute('x2', e);
+                line.setAttribute('y2', maxN);
+                line.setAttribute('stroke', '#0f0');
+                line.setAttribute('stroke-width', '0.5');
+                gridGroup.appendChild(line);
+            }
+
+            // Horizontal lines (North direction)
+            for (let n = minN; n <= maxN; n += GRID_SPACING) {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', minE);
+                line.setAttribute('y1', n);
+                line.setAttribute('x2', maxE);
+                line.setAttribute('y2', n);
+                line.setAttribute('stroke', '#0f0');
+                line.setAttribute('stroke-width', '0.5');
+                gridGroup.appendChild(line);
+            }
+        }
+
+        // Draw operator position marker
+        function drawOperator() {
+            operatorGroup.innerHTML = '';
+            
+            // Operator is always at NED (0, 0, 0)
+            const operatorN = 0;
+            const operatorE = 0;
+
+            // Outer circle
+            const outerCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            outerCircle.setAttribute('cx', operatorE);
+            outerCircle.setAttribute('cy', operatorN);
+            outerCircle.setAttribute('r', '12');
+            outerCircle.setAttribute('fill', 'none');
+            outerCircle.setAttribute('stroke', '#0f0');
+            outerCircle.setAttribute('stroke-width', '2');
+            operatorGroup.appendChild(outerCircle);
+
+            // Inner circle
+            const innerCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            innerCircle.setAttribute('cx', operatorE);
+            innerCircle.setAttribute('cy', operatorN);
+            innerCircle.setAttribute('r', '4');
+            innerCircle.setAttribute('fill', '#0f0');
+            operatorGroup.appendChild(innerCircle);
+
+            // Crosshair
+            const crossH = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            crossH.setAttribute('x1', operatorE - 15);
+            crossH.setAttribute('y1', operatorN);
+            crossH.setAttribute('x2', operatorE + 15);
+            crossH.setAttribute('y2', operatorN);
+            crossH.setAttribute('stroke', '#0f0');
+            crossH.setAttribute('stroke-width', '1');
+            crossH.setAttribute('opacity', '0.5');
+            operatorGroup.appendChild(crossH);
+
+            const crossV = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            crossV.setAttribute('x1', operatorE);
+            crossV.setAttribute('y1', operatorN - 15);
+            crossV.setAttribute('x2', operatorE);
+            crossV.setAttribute('y2', operatorN + 15);
+            crossV.setAttribute('stroke', '#0f0');
+            crossV.setAttribute('stroke-width', '1');
+            crossV.setAttribute('opacity', '0.5');
+            operatorGroup.appendChild(crossV);
+
+            // Label
+            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            label.setAttribute('x', operatorE);
+            label.setAttribute('y', operatorN - 20);
+            label.setAttribute('text-anchor', 'middle');
+            label.setAttribute('fill', '#0f0');
+            label.setAttribute('font-weight', 'bold');
+            label.setAttribute('font-size', '14');
+            label.textContent = 'YOU';
+            operatorGroup.appendChild(label);
+        }
+
+        // Toggle grid visibility
+        function toggleGrid() {
+            showGrid = !showGrid;
+            drawGrid();
+        }
+
+        // Fetch and display targets
+        async function refreshTargets() {
+            try {
+                const response = await fetch('/api/TARGET');
+                targets = await response.json();
+                
+                calculateBounds();
+                updateViewBox();
+                drawGrid();
+                drawOperator();
+                drawTargets();
+                updateTargetsList();
+                updateStats();
+            } catch (error) {
+                console.error('Error fetching targets:', error);
+            }
+        }
+
+        // Draw targets on map
+        function drawTargets() {
+            targetsGroup.innerHTML = '';
+
+            Object.entries(targets).forEach(([id, data]) => {
+                const { north, east } = getCoordinates(data);
+
+                const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                group.setAttribute('class', 'target-marker');
+                group.setAttribute('data-id', id);
+                
+                if (selectedTarget === id) {
+                    group.classList.add('selected');
+                }
+
+                // Circle marker
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', east);
+                circle.setAttribute('cy', north);
+                circle.setAttribute('r', '6');
+                group.appendChild(circle);
+
+                // Target name label
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', east);
+                text.setAttribute('y', north - 12);
+                text.textContent = (data.name || id).toUpperCase();
+                group.appendChild(text);
+
+                // Click handler
+                group.onclick = () => selectTarget(id);
+
+                targetsGroup.appendChild(group);
+            });
+        }
+
+        // Update targets list sidebar
+        function updateTargetsList() {
+            const list = document.getElementById('targetsList');
+            list.innerHTML = '';
+
+            Object.entries(targets).forEach(([id, data]) => {
+                const item = document.createElement('div');
+                item.className = 'target-item';
+                if (selectedTarget === id) {
+                    item.classList.add('selected');
+                }
+
+                const idSpan = document.createElement('div');
+                idSpan.className = 'target-id';
+                idSpan.textContent = `[${id}] ${data.name || 'Unknown'}`;
+
+
+                const info = document.createElement('div');
+                info.className = 'target-info';
+                const { north, east } = getCoordinates(data);
+                info.textContent = `N: ${north} E: ${east}`;
+
+                item.appendChild(idSpan);
+                item.appendChild(info);
+                item.onclick = () => selectTarget(id);
+
+                list.appendChild(item);
+            });
+        }
+
+        // Select target
+        function selectTarget(id) {
+            selectedTarget = selectedTarget === id ? null : id;
+            drawTargets();
+            updateTargetsList();
+        }
+
+        // Clear selection
+        function clearSelection() {
+            selectedTarget = null;
+            drawTargets();
+            updateTargetsList();
+        }
+
+        // Update statistics
+        function updateStats() {
+            document.getElementById('activeCount').textContent = Object.keys(targets).length;
+            document.getElementById('mapSize').textContent = `${MAP_SIZE}x${MAP_SIZE}`;
+        }
+
+        // Initialize on page load
+        window.onload = initMap;
+    </script>
+</body>
+</html>
