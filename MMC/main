@@ -104,12 +104,12 @@ async def turret_azimuth_command(request: Request) -> Dict[str, str]:
 	return {"status": "OK"}
 
 
-@app.post("/turret/azimuth-status")
-async def turret_azimuth_status(request: Request) -> Dict[str, str]:
-	payload = await request.json()
-	_validate("AzimuthStatus", payload)
-	state["current_azimuth"] = payload
-	return {"status": "OK"}
+@app.get("/turret/azimuth-status")
+async def turret_azimuth_status() -> Dict[str, Any]:
+	current_azimuth = state.get("current_azimuth")
+	if current_azimuth is None:
+		raise HTTPException(status_code=404, detail="Azimuth status not available")
+	return current_azimuth
 
 
 if __name__ == "__main__":
