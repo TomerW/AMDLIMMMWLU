@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/mmc_orders.schema.json",
+  "title": "MMC Interface Orders",
+  "description": "JSON Schemas for MMC message orders between BMC, MUC, and Turret.",
+  "$defs": {
+    "TargetId": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Unique target identifier."
+    },
+    "FireCommandType": {
+      "type": "string",
+      "enum": ["YES", "NO"],
+      "description": "Fire authorization."
+    },
+    "LockCommandType": {
+      "type": "string",
+      "enum": ["LOCK", "NO_LOCK"],
+      "description": "Lock command for MUC."
+    },
+    "MissileLockStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "is_missile_lock": {
+          "type": "boolean",
+          "description": "True when missile lock is achieved."
+        }
+      },
+      "required": ["is_missile_lock"]
+    },
+    "TargetKinematics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "position_north": {
+          "type": "number",
+          "description": "Position north (meters)."
+        },
+        "position_east": {
+          "type": "number",
+          "description": "Position east (meters)."
+        },
+        "position_down": {
+          "type": "number",
+          "description": "Position down (meters)."
+        },
+        "velocity_north": {
+          "type": "number",
+          "description": "Velocity north (meters per second)."
+        },
+        "velocity_east": {
+          "type": "number",
+          "description": "Velocity east (meters per second)."
+        },
+        "velocity_down": {
+          "type": "number",
+          "description": "Velocity down (meters per second)."
+        }
+      },
+      "required": [
+        "position_north",
+        "position_east",
+        "position_down",
+        "velocity_north",
+        "velocity_east",
+        "velocity_down"
+      ]
+    },
+    "TargetMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "target_id": { "$ref": "#/$defs/TargetId" },
+        "position_north": {
+          "type": "number",
+          "description": "Position north (meters)."
+        },
+        "position_east": {
+          "type": "number",
+          "description": "Position east (meters)."
+        },
+        "position_down": {
+          "type": "number",
+          "description": "Position down (meters)."
+        },
+        "velocity_north": {
+          "type": "number",
+          "description": "Velocity north (meters per second)."
+        },
+        "velocity_east": {
+          "type": "number",
+          "description": "Velocity east (meters per second)."
+        },
+        "velocity_down": {
+          "type": "number",
+          "description": "Velocity down (meters per second)."
+        }
+      },
+      "required": [
+        "target_id",
+        "position_north",
+        "position_east",
+        "position_down",
+        "velocity_north",
+        "velocity_east",
+        "velocity_down"
+      ]
+    },
+    "FireCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fire_command": { "$ref": "#/$defs/FireCommandType" },
+        "target_id": { "$ref": "#/$defs/TargetId" }
+      },
+      "required": ["fire_command", "target_id"]
+    },
+    "LockCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lock_command": { "$ref": "#/$defs/LockCommandType" }
+      },
+      "required": ["lock_command"]
+    },
+    "AzimuthDegrees": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 359,
+      "description": "Azimuth in degrees (0-359)."
+    },
+    "AzimuthCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "azimuth_command": { "$ref": "#/$defs/AzimuthDegrees" }
+      },
+      "required": ["azimuth_command"]
+    },
+    "AzimuthStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "current_azimuth": { "$ref": "#/$defs/AzimuthDegrees" }
+      },
+      "required": ["current_azimuth"]
+    }
+  },
+  "type": "object",
+  "properties": {
+    "bmc": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "target_message": { "$ref": "#/$defs/TargetMessage" },
+        "fire_command": { "$ref": "#/$defs/FireCommand" },
+        "status": { "$ref": "#/$defs/MissileLockStatus" }
+      }
+    },
+    "muc": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lock_command": { "$ref": "#/$defs/LockCommand" },
+        "lock_status": { "$ref": "#/$defs/MissileLockStatus" }
+      }
+    },
+    "turret": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "azimuth_command": { "$ref": "#/$defs/AzimuthCommand" },
+        "azimuth_status": { "$ref": "#/$defs/AzimuthStatus" }
+      }
+    }
+  },
+  "additionalProperties": false
+}
