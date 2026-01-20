@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Dict
+
+from fastapi import FastAPI, HTTPException, Request
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError
+import uvicorn
+
+
+SCHEMA_PATH = Path(__file__).with_name("mmc_orders.schema.json")
+
+
+def _load_schema() -> Dict[str, Any]:
+	if not SCHEMA_PATH.exists():
+		raise FileNotFoundError(f"Schema file not found: {SCHEMA_PATH}")
+	return SCHEMA_PATH.read_text(encoding="utf-8")
+
+
+def _parse_schema_text(text: str) -> Dict[str, Any]:
+	import json
+
+	return json.loads(text)
+
+
+ROOT_SCHEMA = _parse_schema_text(_load_schema())
+
+
+def _schema_for(def_name: str) -> Dict[str, Any]:
+	return {
+		"$schema": ROOT_SCHEMA.get("$schema"),
+		"$ref": f"#/$defs/{def_name}",
+		"$defs": ROOT_SCHEMA.get("$defs", {}),
+	}
+
+
+def _validate(def_name: str, payload: Dict[str, Any]) -> None:
+	schema = _schema_for(def_name)
+	validator = Draft202012Validator(schema)
+	errors = sorted(validator.iter_errors(payload), key=lambda e: e.path)
+	if errors:
+		details = [" -> ".join([str(p) for p in error.path]) + ": " + error.message for error in errors]
+		raise HTTPException(status_code=400, detail=details)
+
+
+app = FastAPI(title="MMC", version="1.0.0")
+
+state: Dict[str, Any] = {
+	"last_target": None,
+	"fire_command": None,
+	"missile_lock": None,
+	"lock_command": None,
+	"azimuth_command": None,
+	"current_azimuth": None,
+}
+
+
+@app.post("/bmc/target")
+async def bmc_target(request: Request) -> Dict[str, str]:
+	payload = await request.json()
+	_validate("TargetMessage", payload)
+	state["last_target"] = payload
+	return {"status": "OK"}
+
+
+@app.post("/bmc/fire-command")
+async def bmc_fire_command(request: Request) -> Dict[str, str]:
+	payload = await request.json()
+	_validate("FireCommand", payload)
+	state["fire_command"] = payload
+	return {"status": "OK"}
+
+
+@app.post("/bmc/status")
+async def bmc_status(request: Request) -> Dict[str, str]:
+	payload = await request.json()
+	_validate("MissileLockStatus", payload)
+	state["missile_lock"] = payload
+	return {"status": "OK"}
+
+
+@app.post("/muc/lock-command")
+async def muc_lock_command(request: Request) -> Dict[str, str]:
+	payload = await request.json()
+	_validate("LockCommand", payload)
+	state["lock_command"] = payload
+	return {"status": "OK"}
+
+
+@app.post("/muc/lock-status")
+async def muc_lock_status(request: Request) -> Dict[str, str]:
+	payload = await request.json()
+	_validate("MissileLockStatus", payload)
+	state["missile_lock"] = payload
+	return {"status": "OK"}
+
+
+@app.post("/turret/azimuth-command")
+async def turret_azimuth_command(request: Request) -> Dict[str, str]:
+	payload = await request.json()
+	_validate("AzimuthCommand", payload)
+	state["azimuth_command"] = payload
+	return {"status": "OK"}
+
+
+@app.post("/turret/azimuth-status")
+async def turret_azimuth_status(request: Request) -> Dict[str, str]:
+	payload = await request.json()
+	_validate("AzimuthStatus", payload)
+	state["current_azimuth"] = payload
+	return {"status": "OK"}
+
+
+if __name__ == "__main__":
+	uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=False)
