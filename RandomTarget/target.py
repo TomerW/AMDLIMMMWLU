@@ -4,29 +4,38 @@ import threading
 from . import config
 
 class Target:
-    """Holds the data and logic for a single target in 3D space."""
+    """Holds the data and logic for a single target in North-East-Down (NED) coords.
+
+    Attributes:
+      north: float (meters)
+      east:  float (meters)
+      down:  float (meters, positive down)
+      vn, ve, vd: velocities in m/s (north, east, down)
+    """
     def __init__(self, target_id):
         self.target_id = target_id
-        self.x = round(random.uniform(-500, 500), 2)
-        self.y = round(random.uniform(-500, 500), 2)
-        self.z = round(random.uniform(0, 500), 2)
-        # Random constant velocity
-        self.vx = round(random.uniform(-20, 20), 2)
-        self.vy = round(random.uniform(-20, 20), 2)
-        self.vz = round(random.uniform(-5, 5), 2)
+        # NED coordinates
+        self.north = round(random.uniform(-500, 500), 2)
+        self.east = round(random.uniform(-500, 500), 2)
+        self.down = round(random.uniform(0, 500), 2)
+        # Random constant velocity in NED (m/s)
+        self.vn = round(random.uniform(-20, 20), 2)  # north velocity
+        self.ve = round(random.uniform(-20, 20), 2)  # east velocity
+        self.vd = round(random.uniform(-5, 5), 2)    # down velocity
         self.creation_time = time.time()
 
     def update_position(self, dt):
-        self.x = round(self.x + (self.vx * dt), 2)
-        self.y = round(self.y + (self.vy * dt), 2)
-        self.z = round(self.z + (self.vz * dt), 2)
+        """Update NED position using velocities and dt seconds."""
+        self.north = round(self.north + (self.vn * dt), 2)
+        self.east = round(self.east + (self.ve * dt), 2)
+        self.down = round(self.down + (self.vd * dt), 2)
 
     def to_dict(self):
         return {
             "id": self.target_id,
             "timestamp": time.time(),
-            "position": {"x": self.x, "y": self.y, "z": self.z},
-            "velocity": {"vx": self.vx, "vy": self.vy, "vz": self.vz}
+            "position": {"north": self.north, "east": self.east, "down": self.down},
+            "velocity": {"vn": self.vn, "ve": self.ve, "vd": self.vd}
         }
 
 def target_thread_task(target_obj: Target):

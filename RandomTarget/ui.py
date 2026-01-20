@@ -4,10 +4,11 @@ import threading
 import time
 from . import config, target, logger
 
+
 class TargetGeneratorUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("3D Target Generator Controller")
+        self.root.title("3D Target Generator Controller (NED)")
         self.root.geometry("640x420")
         self.target_counter = 0
 
@@ -17,7 +18,7 @@ class TargetGeneratorUI:
         self.btn_add_target = tk.Button(top, text="GENERATE TARGET THREAD", command=self.add_target_thread, bg="#4CAF50", fg="white")
         self.btn_add_target.pack(side=tk.LEFT, padx=6)
 
-        tk.Label(top, text="JSON write interval (s):").pack(side=tk.LEFT, padx=(12,0))
+        tk.Label(top, text="JSON write interval (s):").pack(side=tk.LEFT, padx=(12, 0))
         self.entry_json_rate = tk.Entry(top, width=6)
         self.entry_json_rate.insert(0, str(config.JSON_WRITE_RATE))
         self.entry_json_rate.pack(side=tk.LEFT, padx=4)
@@ -47,7 +48,7 @@ class TargetGeneratorUI:
 
         # Left: list of targets
         left = tk.Frame(main)
-        left.pack(side=tk.LEFT, fill=tk.Y, padx=(0,8))
+        left.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8))
         tk.Label(left, text="Active Targets:").pack(anchor=tk.W)
         self.lst_targets = tk.Listbox(left, height=16, width=20)
         self.lst_targets.pack()
@@ -56,13 +57,13 @@ class TargetGeneratorUI:
         # Right: progress/details
         right = tk.Frame(main)
         right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        tk.Label(right, text="Selected Target Progress:").pack(anchor=tk.W)
+        tk.Label(right, text="Selected Target Progress (NED):").pack(anchor=tk.W)
         self.progress = ttk.Progressbar(right, orient=tk.HORIZONTAL, length=400, mode="determinate", maximum=config.TARGET_LIFETIME)
         self.progress.pack(pady=6)
         self.lbl_progress = tk.Label(right, text="No selection")
         self.lbl_progress.pack(anchor=tk.W)
         self.lbl_details = tk.Label(right, text="Details: -")
-        self.lbl_details.pack(anchor=tk.W, pady=(6,0))
+        self.lbl_details.pack(anchor=tk.W, pady=(6, 0))
 
         # status/footer
         self.label_status = tk.Label(root, text="Active: 0", fg="blue")
@@ -86,7 +87,7 @@ class TargetGeneratorUI:
         config.target_threads.append(t)
 
         self.update_status_label()
-        print(f"-> Spawned Target {new_target.target_id} (vx={new_target.vx}, vy={new_target.vy}, vz={new_target.vz})")
+        print(f"-> Spawned Target {new_target.target_id} (vn={new_target.vn}, ve={new_target.ve}, vd={new_target.vd})")
 
     def apply_json_rate(self):
         try:
@@ -131,7 +132,7 @@ class TargetGeneratorUI:
             self.progress['maximum'] = config.TARGET_LIFETIME
             self.progress['value'] = min(config.TARGET_LIFETIME, age)
             self.lbl_progress.config(text=f"ID {found.target_id} — age {age:.1f}s / {config.TARGET_LIFETIME}s (remaining {remaining:.1f}s)")
-            details = f"pos=({found.x},{found.y},{found.z}) vel=({found.vx},{found.vy},{found.vz})"
+            details = f"N={found.north}, E={found.east}, D={found.down}  |  vn={found.vn}, ve={found.ve}, vd={found.vd}"
             self.lbl_details.config(text=f"Details: {details}")
         else:
             self.lbl_progress.config(text="Selected target not found")

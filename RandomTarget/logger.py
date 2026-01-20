@@ -23,8 +23,8 @@ def json_logger_task():
                 current_data_snapshot.append({
                     "id": target.target_id,
                     "timestamp": time.time(),
-                    "position": {"x": target.x, "y": target.y, "z": target.z},
-                    "velocity": {"vx": target.vx, "vy": target.vy, "vz": target.vz}
+                    "position": {"north": target.north, "east": target.east, "down": target.down},
+                    "velocity": {"vn": target.vn, "ve": target.ve, "vd": target.vd}
                 })
 
         # write directly (no temp file). flush+fsync to reduce partial-write window.
