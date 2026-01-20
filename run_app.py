@@ -5,6 +5,13 @@ import subprocess
 import tkinter as tk
 from urllib.parse import urlparse
 
+# Ensure the package root is on sys.path so `import RandomTarget` works
+if __package__ is None:
+    # running as a script: add parent folder to sys.path
+    parent = os.path.dirname(os.path.dirname(__file__))
+    if parent not in sys.path:
+        sys.path.insert(0, parent)
+
 from RandomTarget.ui import TargetGeneratorUI
 from RandomTarget import config
 
