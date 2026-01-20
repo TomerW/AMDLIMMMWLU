@@ -105,12 +105,14 @@
     <script>
         const GRID_SPACING = 50;
         const MARGIN = 50;
+        const TURRET_LINE_LENGTH = 100; // Length of turret azimuth indicator line
         let targets = {};
         let selectedTarget = null;
         let showGrid = true;
         let autoRefresh = true;
         let mapBounds = { minN: 0, maxN: 0, minE: 0, maxE: 0 };
         let scale = 1;
+        let turretAzimuth = 0; // Track turret azimuth locally
 
         const svg = document.getElementById('mapSvg');
         const gridGroup = document.getElementById('grid');
@@ -180,10 +182,12 @@
         }
 
         // Update SVG viewBox based on bounds
+        // Flip the Y-axis so positive North is UP
         function updateViewBox() {
             const width = mapBounds.maxE - mapBounds.minE;
             const height = mapBounds.maxN - mapBounds.minN;
-            svg.setAttribute('viewBox', `${mapBounds.minE} ${mapBounds.minN} ${width} ${height}`);
+            // Flip viewBox: maxN becomes minY, minN becomes maxY
+            svg.setAttribute('viewBox', `${mapBounds.minE} ${-mapBounds.maxN} ${width} ${height}`);
         }
 
         // Initialize map
@@ -292,6 +296,51 @@
             label.setAttribute('font-size', '14');
             label.textContent = 'YOU';
             operatorGroup.appendChild(label);
+
+            // Turret azimuth indicator line
+            drawTurretAzimuthLine(operatorE, operatorN);
+        }
+
+        // Draw turret azimuth indicator line
+        function drawTurretAzimuthLine(centerE, centerN) {
+            // Convert azimuth angle to radians (azimuth 0 = North, 90 = East)
+            // With flipped Y-axis: North is positive Y (up), East is positive X (right)
+            const azimuthRad = (turretAzimuth * Math.PI) / 180;
+            
+            // Calculate endpoint of the line
+            // North component: cos(azimuth) - needs to be negated for Y coordinate
+            // East component (positive X): sin(azimuth)
+            const endN = centerN + Math.cos(azimuthRad) * TURRET_LINE_LENGTH;
+            const endE = centerE + Math.sin(azimuthRad) * TURRET_LINE_LENGTH;
+            
+            // Draw the line - negate Y values for proper north-up display
+            const azimuthLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            azimuthLine.setAttribute('x1', centerE);
+            azimuthLine.setAttribute('y1', -centerN);  // Negate for correct Y direction
+            azimuthLine.setAttribute('x2', endE);
+            azimuthLine.setAttribute('y2', -endN);      // Negate for correct Y direction
+            azimuthLine.setAttribute('stroke', '#ffaa00');
+            azimuthLine.setAttribute('stroke-width', '2');
+            azimuthLine.setAttribute('marker-end', 'url(#arrowhead)');
+            operatorGroup.appendChild(azimuthLine);
+            
+            // Add arrowhead marker if it doesn't exist
+            if (!document.getElementById('arrowhead')) {
+                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                marker.setAttribute('id', 'arrowhead');
+                marker.setAttribute('markerWidth', '10');
+                marker.setAttribute('markerHeight', '10');
+                marker.setAttribute('refX', '9');
+                marker.setAttribute('refY', '3');
+                marker.setAttribute('orient', 'auto');
+                const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                polygon.setAttribute('points', '0 0, 10 3, 0 6');
+                polygon.setAttribute('fill', '#ffaa00');
+                marker.appendChild(polygon);
+                defs.appendChild(marker);
+                svg.insertBefore(defs, svg.firstChild);
+            }
         }
 
         // Toggle grid visibility
@@ -343,17 +392,17 @@
                     group.classList.add('selected');
                 }
 
-                // Circle marker
+                // Circle marker - flip north coordinate for correct display
                 const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                 circle.setAttribute('cx', east);
-                circle.setAttribute('cy', north);
+                circle.setAttribute('cy', -north);  // Flip north so positive is up
                 circle.setAttribute('r', '6');
                 group.appendChild(circle);
 
                 // Target name label (use ID as name)
                 const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                 text.setAttribute('x', east);
-                text.setAttribute('y', north - 12);
+                text.setAttribute('y', -north - 12);  // Flip north so positive is up
                 text.textContent = id.toUpperCase();
                 group.appendChild(text);
 
@@ -439,7 +488,10 @@
 
         // Update turret azimuth display
         function updateTurretDisplay(azimuth) {
+            turretAzimuth = azimuth;
             document.getElementById('turretAzimuth').textContent = azimuth.toFixed(1) + '°';
+            // Redraw operator marker with new turret line
+            drawOperator();
         }
 
         // Update statistics

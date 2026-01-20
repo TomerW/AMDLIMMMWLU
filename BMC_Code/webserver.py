@@ -17,10 +17,12 @@ turret_azimuth = 0  # Track current turret azimuth in degrees
 INACTIVE_THRESHOLD = 5.0  # seconds
 
 # ============= Helper Functions =============
-
+updateing_target = False
 def notify_launcher(target_id):
+    updateing_target = True
     """Notify launcher about the selected target position"""
     if not target_id or target_id not in targets:
+        updateing_target = False
         return False
     
     try:
@@ -47,19 +49,22 @@ def notify_launcher(target_id):
             method="POST"
         )
         
-        with urllib.request.urlopen(req, timeout=5.0) as resp:
+        with urllib.request.urlopen(req, timeout=1.0) as resp:
             response_data = resp.read()
         
         print(f"Notified launcher about target {target_id}: {payload}")
+        updateing_target = False
         return True
     except Exception as e:
         print(f"Error notifying launcher: {e}")
+        updateing_target =False
         return False
 
 def notify_launcher_async(target_id):
     """Send launcher notification asynchronously without blocking"""
-    thread = threading.Thread(target=notify_launcher, args=(target_id,), daemon=True)
-    thread.start()
+    if not updateing_target:
+        thread = threading.Thread(target=notify_launcher, args=(target_id,), daemon=True)
+        thread.start()
 
 # ============= Helper Functions =============
 
@@ -114,8 +119,10 @@ def update_target():
             handle_target(data)
 
         for tgt_id in targets.keys():
-            print (f"target_timestamps[{tgt_id}] = {target_timestamps[tgt_id]}")
-            if time.time() > target_timestamps[tgt_id] + INACTIVE_THRESHOLD:
+            
+            age = time.time() - target_timestamps[tgt_id]
+            if age > INACTIVE_THRESHOLD:
+                print(f"target_timestamps[{tgt_id}] = {target_timestamps[tgt_id]} ({age:.1f}s old) - removing inactive target")
                 del targets[tgt_id]
                 del target_timestamps[tgt_id] 
 
