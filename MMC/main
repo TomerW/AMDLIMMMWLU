@@ -49,7 +49,7 @@ def _validate(def_name: str, payload: Dict[str, Any]) -> None:
 
 def _azimuth_from_north_east(north: float, east: float) -> int:
 	angle_rad = math.atan2(east, north)
-	angle_deg = math.degrees(angle_rad) % 360
+	angle_deg = (math.degrees(angle_rad)+360) % 360
 	return int(round(angle_deg)) % 360
 
 
@@ -62,6 +62,7 @@ app = FastAPI(title="MMC", version="1.0.0")
 
 TURRET_BASE_URL = os.getenv("TURRET_BASE_URL", "http://172.20.10.4:5000")
 MUC_BASE_URL = os.getenv("MUC_BASE_URL", "http://127.0.0.1:4000")
+BMC_BASE_URL = os.getenv("BMC_BASE_URL", "http://172.20.10.3:5000")
 
 state: Dict[str, Any] = {
 	"last_target": None,
@@ -159,9 +160,21 @@ async def turret_azimuth_status_report(request: Request) -> Dict[str, str]:
 	_validate("AzimuthStatus", payload)
 	state["current_azimuth"] = payload
 	print(f"Turret azimuth status received: {payload}")
+	current = payload.get("current_azimuth")
+	if isinstance(current, int):
+		bmc_payload = {"azimuth": current}
+		try:
+			async with httpx.AsyncClient(timeout=5.0) as client:
+				response = await client.post(
+					f"{BMC_BASE_URL}/api/turret/azimuth_update",
+					json=bmc_payload,
+				)
+				response.raise_for_status()
+				print(f"Sent BMC azimuth update: {bmc_payload}")
+		except httpx.HTTPError as exc:
+			raise HTTPException(status_code=502, detail=f"BMC azimuth update failed: {exc}") from exc
 	azimuth_command = state.get("azimuth_command")
 	if azimuth_command and "azimuth_command" in azimuth_command:
-		current = payload.get("current_azimuth")
 		commanded = azimuth_command.get("azimuth_command")
 		if isinstance(current, int) and isinstance(commanded, int):
 			if _azimuth_in_range(current, commanded, tolerance=5):
