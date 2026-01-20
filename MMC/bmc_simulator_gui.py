@@ -61,7 +61,7 @@ class BmcSimulatorGUI:
 	def __init__(self, root: tk.Tk) -> None:
 		self.root = root
 		self.root.title("BMC Simulator")
-		self.base_url_var = tk.StringVar(value=os.getenv("MMC_BASE_URL", "http://127.0.0.1:4000"))
+		self.base_url_var = tk.StringVar(value=os.getenv("MMC_BASE_URL", "http://172.20.10.3:4000"))
 		self.state_path = os.getenv("BMC_SIM_STATE", "bmc_sim_state.json")
 		self.state = _load_state(self.state_path)
 		self.mmc_process: subprocess.Popen[str] | None = None
