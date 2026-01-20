@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict
+import math
 
 from fastapi import FastAPI, HTTPException, Request
 from jsonschema import Draft202012Validator
@@ -44,6 +45,12 @@ def _validate(def_name: str, payload: Dict[str, Any]) -> None:
 		raise HTTPException(status_code=400, detail=details)
 
 
+def _azimuth_from_north_east(north: float, east: float) -> int:
+	angle_rad = math.atan2(east, north)
+	angle_deg = math.degrees(angle_rad) % 360
+	return int(round(angle_deg)) % 360
+
+
 app = FastAPI(title="MMC", version="1.0.0")
 
 state: Dict[str, Any] = {
@@ -61,6 +68,14 @@ async def bmc_target(request: Request) -> Dict[str, str]:
 	payload = await request.json()
 	_validate("TargetMessage", payload)
 	state["last_target"] = payload
+	azimuth_command = {
+		"azimuth_command": _azimuth_from_north_east(
+			payload["position_north"],
+			payload["position_east"],
+		),
+	}
+	_validate("AzimuthCommand", azimuth_command)
+	state["azimuth_command"] = azimuth_command
 	return {"status": "OK"}
 
 
