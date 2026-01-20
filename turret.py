@@ -6,7 +6,7 @@ import urllib.request
 from flask import Flask, jsonify, request
 
 # --- Configuration ---
-UPDATE_DT = 0.1  # 10Hz update frequency
+UPDATE_DT = 1  # 1Hz update frequency
 HOST_IP = os.getenv("HOST_IP", "0.0.0.0")  # Bind to all interfaces by default
 PORT = 5000  # Listening port for API access
 # Where to push azimuth updates; defaults to port 4000
@@ -17,7 +17,7 @@ shutdown_event = threading.Event()
 app = Flask(__name__)
 
 class TurretController:
-    def __init__(self, initial_azimuth=0.0, rotation_speed=30.0):
+    def __init__(self, initial_azimuth=0.0, rotation_speed=10.0):
         self.current_azimuth = initial_azimuth % 360
         self.target_azimuth = initial_azimuth % 360
         self.rotation_speed = abs(rotation_speed)
